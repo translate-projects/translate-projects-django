@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="translate-projects-django",
-    version="0.0.2",
+    version="0.0.4",
     author="Neider Ruiz",
     author_email="contact@neiderruiz.com",
     description="Translate your django templates easily",
@@ -32,5 +32,6 @@ setup(
     install_requires=[
         "Django>=3.0",
         "polib>=1.2.0",
+        "requests>=2.27.1,<3.0",
     ],
 )
