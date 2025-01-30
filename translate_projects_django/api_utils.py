@@ -9,7 +9,9 @@ def get_translations_from_api(data, source_lang, target_lang, route_file):
     
     url_api += '&type_project=django'
 
-    token = settings.TRANSLATEFILES_API_TOKEN
+    token = settings.TRANSLATE_PROJECTS_API_KEY
+    token = getattr(settings, "TRANSLATE_PROJECTS_API_KEY", None)
+
 
     if token:
         token = f"Token {token}"
