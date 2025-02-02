@@ -32,7 +32,7 @@ def get_translations_from_api(self,data, source_lang, target_lang, route_file):
         }
     )
     if response.status_code == 524 or response.status_code == 504:
-        get_translations_from_api(data, source_lang, target_lang, route_file)
+        get_translations_from_api(self,data, source_lang, target_lang, route_file)
 
     if response.status_code == 400:
         error_message = get_error_message(response)
