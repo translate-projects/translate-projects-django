@@ -5,10 +5,10 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="translate-projects-django",
-    version="0.0.4",
+    version="0.0.5",
     author="Neider Ruiz",
     author_email="contact@neiderruiz.com",
-    description="Translate your django templates easily",
+    description="Translate your Django projects easily",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/translate-projects/translate-projects-django",
