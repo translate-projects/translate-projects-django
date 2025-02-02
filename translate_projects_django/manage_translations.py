@@ -17,7 +17,15 @@ def make_recreate_json(original_translations, data_result_translations):
     return recreate_json
 
 def generate_translations(self, target_lang, locale_dir):
-    default_language = settings.LANGUAGE_CODE
+    default_language = getattr(settings, 'LANGUAGE_CODE', '')
+
+    if not default_language:
+        self.stdout.write(self.style.ERROR(f"Error: LANGUAGE_CODE is not set in settings.py"))
+        return
+
+    exclude_dirs = getattr(settings, 'TRANSLATE_PROJECTS_EXCLUDE_DIRS', [])
+    
+    exclude_pattern = " ".join([f'--ignore="{dir}"' for dir in exclude_dirs])
 
     # Start
     self.stdout.write(self.style.SUCCESS(f"\n🚀 Starting translation generation for language: {target_lang}"))
@@ -25,7 +33,7 @@ def generate_translations(self, target_lang, locale_dir):
     # Step 1: Generate files .po
     self.stdout.write(self.style.WARNING(f"  Step 1: Generating .po file for '{target_lang}'..."))
     
-    call_command('makemessages', locale=[target_lang], verbosity=0)
+    call_command('makemessages', locale=[target_lang], verbosity=0,ignore=exclude_dirs)
     
     self.stdout.write(self.style.SUCCESS(f"    ✔ .po file generated for '{target_lang}'"))
 
@@ -46,7 +54,11 @@ def generate_translations(self, target_lang, locale_dir):
 
     # Step 2: Get translations from API
     self.stdout.write(self.style.WARNING(f"  Step 2: get translations for '{target_lang}'..."))
-    data_result_translations = get_translations_from_api(translations, default_language, target_lang, f"{default_language}-django.po")
+    data_result_translations = get_translations_from_api(self,translations, default_language, target_lang, f"{default_language}-django.po")
+    
+    if not data_result_translations:
+        return
+    
     self.stdout.write(self.style.SUCCESS(f"    ✔ Translations get (received: {len(data_result_translations)}))"))
 
     # Step 5: Recreate translations
