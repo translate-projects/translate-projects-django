@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="translate-projects-django",
-    version="0.0.5",
+    version="0.0.6",
     author="Neider Ruiz",
     author_email="contact@neiderruiz.com",
     description="Translate your Django projects easily",
