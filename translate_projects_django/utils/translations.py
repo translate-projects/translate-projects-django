@@ -16,7 +16,9 @@ console = Console(log_time=True, log_path=False)
 
 # Texts the backend never stores (helpers/ignore_list.py), so they never come back translated
 IGNORED = {"", ".", ",", ":", ";", "..."}
-PLACEHOLDER = re.compile(r"%\([^)]+\)[a-z]|%[a-z]|\{[\w.]*\}")
+PLACEHOLDER = re.compile(r"%%|%\([^)]+\)[a-z]|%[a-z]|\{[\w.]*\}")
+# A "%" that is not "%%" nor a format spec: the AI unescapes "100 %%" into "100 %"
+LONE_PERCENT = re.compile(r"(?<!%)%(?!%|\([^)]+\)[a-z]|[a-z])")
 CACHE_FILE = ".translate-projects.json"
 
 
@@ -95,6 +97,8 @@ def write_po(po, lang, translations, locale_dir):
         translation = translations.get(entry.msgid)
         if not translation:
             continue
+        if "python-format" in entry.flags:
+            translation = LONE_PERCENT.sub("%%", translation)
         # A broken placeholder makes compilemessages fail, so keep the source text instead
         if not placeholders_ok(entry.msgid, translation):
             rejected.append(entry.msgid)

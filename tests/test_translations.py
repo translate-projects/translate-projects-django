@@ -93,6 +93,26 @@ class PlaceholderTests(unittest.TestCase):
         self.assertFalse(tr.placeholders_ok("Hola %(name)s", "Olá %(nome)s"))
         self.assertFalse(tr.placeholders_ok("%s de %d", "%s"))
         self.assertTrue(tr.placeholders_ok("{count} items", "{count} elementos"))
+        self.assertFalse(tr.placeholders_ok("100 %% gratis", "100 % gratuit"))
+
+    def test_python_format_reescapes_percent(self):
+        po = polib.POFile()
+        cases = {
+            "100 %% gratis": ("100 % gratuit", "100 %% gratuit"),
+            "Ahorra 100%% hoy": ("Save 100% today", "Save 100%% today"),
+            "Tarjeta %(last4)s al 50%%": ("Card %(last4)s at 50%", "Card %(last4)s at 50%%"),
+            "Ya escapado %%": ("Already %%", "Already %%"),
+        }
+        for msgid in cases:
+            po.append(polib.POEntry(msgid=msgid, msgstr="", flags=["python-format"]))
+        locale_dir = tempfile.mkdtemp()
+        filled, rejected = tr.write_po(
+            po, "fr", {k: v[0] for k, v in cases.items()}, locale_dir
+        )
+        self.assertEqual((filled, rejected), (4, []))
+        written = polib.pofile(tr.po_path(locale_dir, "fr"))
+        for msgid, (_, expected) in cases.items():
+            self.assertEqual(written.find(msgid).msgstr, expected)
 
 
 @mock.patch.object(tr, "wait_task", lambda *a, **k: True)
