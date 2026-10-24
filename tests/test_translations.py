@@ -158,6 +158,13 @@ class FlowTests(unittest.TestCase):
         self.run_command(fake, force=True)
         self.assertEqual(len([c for c in fake.calls if c[0] == "translate"]), 2)
 
+    def test_force_one_locale_keeps_other_cache_entries(self):
+        self.run_command(FakeApi())
+        fake = FakeApi(changed={})
+        self.run_command(fake, locale="en", force=True)
+        self.assertEqual([c for c in fake.calls if c[0] == "translate"], [("translate", "en")])
+        self.assertEqual(set(tr.load_cache(settings.LOCALE_PATHS[0])), {"en", "pt-br"})
+
     def test_invalid_locale_does_nothing(self):
         fake = FakeApi()
         self.run_command(fake, locale="ko")

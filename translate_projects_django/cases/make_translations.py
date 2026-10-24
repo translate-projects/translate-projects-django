@@ -67,11 +67,13 @@ def make_translations(self, locale_param, force=False):
         return
     upload_time = time.monotonic() - started
 
-    cache = {} if force else load_cache(locale_dir)
+    cache = load_cache(locale_dir)
     pending = [
         lang
         for lang in targets
-        if cache.get(lang) != version or not os.path.exists(po_path(locale_dir, lang))
+        if force
+        or cache.get(lang) != version
+        or not os.path.exists(po_path(locale_dir, lang))
     ]
     for lang in set(targets) - set(pending):
         console.log(f"✅ [green]{lang} is up to date, skipped[/]")
@@ -92,7 +94,9 @@ def make_translations(self, locale_param, force=False):
             results = [r for r in pool.map(run, pending) if r]
 
     for result in results:
-        if not result["missing"]:
+        if result["missing"]:
+            cache.pop(result["lang"], None)
+        else:
             cache[result["lang"]] = version
     if results:
         save_cache(locale_dir, cache)
