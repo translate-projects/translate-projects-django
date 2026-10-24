@@ -7,31 +7,17 @@ class Command(BaseCommand):
     help = "Translate the project for a specific language or all languages."
 
     def add_arguments(self, parser):
-        # Add an optional argument for the locale
         parser.add_argument(
             "--locale",
             type=str,
             help='Specific language to translate, e.g., "ko" for Korean.',
         )
-        # get translations api
         parser.add_argument(
-            "--get",
+            "--force",
             action="store_true",
-            help="Get translations from API",
-            default=False,
+            help="Translate every language even if its .po is up to date "
+            "(pulls edits made in the dashboard).",
         )
 
     def handle(self, *args, **kwargs):
-        # Get the locale argument
-        locale_param = kwargs.get("locale")
-
-        # Get the get argument
-        get_translations = kwargs.get("get")
-
-        if get_translations:
-            # logic for get translations
-            return
-
-        if not get_translations:
-            make_translations(self, locale_param)
-            return
+        make_translations(self, kwargs.get("locale"), force=kwargs.get("force"))

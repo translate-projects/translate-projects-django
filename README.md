@@ -9,10 +9,12 @@ Automate the translation of your Django project's `.po` files with [Translate Pr
 `python manage.py translate`:
 
 1. Runs `makemessages` for your default language (`LANGUAGE_CODE`) and reads the resulting `django.po`.
-2. Sends every `msgid` (keyed by a short SHA-256/Base36 hash) to the API as the project's source strings.
-3. For each target language, requests the translation, shows live progress (via WebSocket) and downloads the results.
-4. Writes `locale/<lang>/LC_MESSAGES/django.po` with the translated `msgstr` values (clearing `fuzzy` flags).
+2. Asks the API whether it already has this exact set of texts; if not, uploads every `msgid` (keyed by a short SHA-256/Base36 hash) as the project's source strings.
+3. Translates up to 3 languages in parallel: requests the translation, shows live progress (WebSocket, with a timeout) and downloads the results.
+4. Writes `locale/<locale>/LC_MESSAGES/django.po` (`pt-br` → `pt_BR`). Translations that change a placeholder (`%(name)s`, `%s`, `{name}`) are dropped so `compilemessages` never breaks.
 5. Runs `compilemessages`.
+
+A second run with no new texts makes one HTTP request and skips every language that is already complete (tracked in `locale/.translate-projects.json`). Use `--force` to download again, e.g. after editing translations in the dashboard.
 
 ## Requirements
 
@@ -76,7 +78,13 @@ python manage.py translate --locale en
 
 The language must exist in `LANGUAGES` and differ from `LANGUAGE_CODE`.
 
-> `--get` is reserved for fetching translations from the API and is not implemented yet.
+Download every language again, even if it is up to date:
+
+```bash
+python manage.py translate --force
+```
+
+Requires GNU gettext (`xgettext`, `msgfmt`), like any Django translation workflow.
 
 ## Project structure
 
@@ -85,12 +93,10 @@ translate_projects_django/
 ├── management/commands/translate.py   # `translate` management command
 ├── cases/make_translations.py         # orchestrates the whole flow
 └── utils/
-    ├── api.py            # HTTP client for api.translateprojects.dev (with retries)
-    ├── channels.py       # WebSocket progress bar
+    ├── api.py            # HTTP client for api.translateprojects.dev (timeouts, retries)
+    ├── channels.py       # WebSocket progress with idle timeout
     ├── hashing.py        # short SHA-256 → Base36 hashes used as string keys
-    ├── po.py             # writes translated .po files
-    ├── recreate_json.py  # maps API results (by hash) back to msgids
-    └── translations.py   # makemessages → sync → translate → write per language
+    └── translations.py   # makemessages, upload, translate and write .po per language
 ```
 
 ## Support

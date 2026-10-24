@@ -1,65 +1,116 @@
+import os
+import time
+from concurrent.futures import ThreadPoolExecutor
+
 from django.conf import settings
 from django.core.management import call_command
 from rich.console import Console
+from rich.progress import Progress
 
 from translate_projects_django.utils.api import Api
-from translate_projects_django.utils.translations import generate_translations
+from translate_projects_django.utils.translations import (
+    cache_hash,
+    extract_sources,
+    load_cache,
+    po_path,
+    save_cache,
+    sync_sources,
+    translate_language,
+)
 
 console = Console(log_time=True, log_path=False)
 
+PARALLEL_LANGUAGES = 3
 
-def make_translations(self, locale_param):
-    languages = getattr(settings, "LANGUAGES", [])
-    locale_dir = getattr(settings, "LOCALE_PATHS", [])[0]
+
+def make_translations(self, locale_param, force=False):
+    languages = dict(getattr(settings, "LANGUAGES", []))
+    locale_paths = getattr(settings, "LOCALE_PATHS", [])
     default_language = getattr(settings, "LANGUAGE_CODE", "")
+    exclude_dirs = getattr(settings, "TRANSLATE_PROJECTS_EXCLUDE_DIRS", [])
 
-    self.api_client = Api()
-
-    console.log("🎯 [bold green]Start Generate Translations")
-
-    # 🚀 Generar traducciones para el idioma predeterminado
-    generate_translations(self, "es", locale_dir)
+    if not getattr(settings, "TRANSLATE_PROJECTS_API_KEY", None):
+        console.log("[red]❌ TRANSLATE_PROJECTS_API_KEY is not set in settings.py[/]")
+        return
+    if not default_language or not locale_paths:
+        console.log("[red]❌ LANGUAGE_CODE and LOCALE_PATHS must be set in settings.py[/]")
+        return
+    locale_dir = str(locale_paths[0])
 
     if locale_param:
-        # ⚠ Validar si el idioma proporcionado es válido
-        if locale_param not in dict(languages):
+        if locale_param not in languages:
             console.log(f"[red]❌ The language '{locale_param}' is not valid.[/]")
-            console.log(
-                f"[yellow]⚠ Available languages:[/] {', '.join([lang[0] for lang in languages])}"
-            )
-            console.log(
-                "[blue]💡 You can add the language in settings.py under LANGUAGES=[...][/]"
-            )
+            console.log(f"[yellow]⚠ Available languages:[/] {', '.join(languages)}")
+            console.log("[blue]💡 Add it in settings.py under LANGUAGES=[...][/]")
             return
-
-        # ⚠ Advertir si el idioma es el mismo que el predeterminado
         if locale_param == default_language:
             console.log(
-                f"[yellow]⚠ The language '{locale_param}' is not translated because it's the default language '{default_language}'.[/]"
+                f"[yellow]⚠ '{locale_param}' is the default language, nothing to translate.[/]"
             )
             return
+        targets = [locale_param]
+    else:
+        targets = [code for code in languages if code != default_language]
 
-        # 🚀 Traducir para el idioma específico
-        console.log("\n🚀 [bold green]Translating for language:[/] {locale_param}")
-        generate_translations(self, locale_param, locale_dir)
-        console.log(
-            f"\n🎉 [bold green]Translation for '{locale_param}' completed successfully ✅[/]\n"
-        )
+    api = Api()
+    run_started = time.monotonic()
+    console.log("🎯 [bold green]Start Generate Translations")
 
-        # 🛠 Compilar mensajes
-        console.log("\n🛠 [yellow]Compiling messages...[/]")
-        call_command("compilemessages", verbosity=0)
+    started = time.monotonic()
+    po, sources = extract_sources(default_language, locale_dir, exclude_dirs)
+    extract_time = time.monotonic() - started
+    console.log(f"📂 {len(sources)} texts found in {default_language}")
+
+    started = time.monotonic()
+    version = cache_hash(sources)
+    if not sync_sources(api, sources, default_language, version):
         return
+    upload_time = time.monotonic() - started
 
-    # 🌍 Si no se proporciona un idioma específico, traducir todos los idiomas excepto el predeterminado
-    for code, name in languages:
-        if code != default_language:
-            generate_translations(self, code, locale_dir)
+    cache = {} if force else load_cache(locale_dir)
+    pending = [
+        lang
+        for lang in targets
+        if cache.get(lang) != version or not os.path.exists(po_path(locale_dir, lang))
+    ]
+    for lang in set(targets) - set(pending):
+        console.log(f"✅ [green]{lang} is up to date, skipped[/]")
 
-    # 🛠 Compilar mensajes después de generar todas las traducciones
-    console.log("\n🛠 [yellow]Compiling messages for all languages...[/]")
+    results = []
+    if pending:
+        with Progress(console=console) as progress, ThreadPoolExecutor(
+            PARALLEL_LANGUAGES
+        ) as pool:
 
-    call_command("compilemessages", verbosity=0)
+            def run(lang):
+                bar = progress.add_task(f"📝 Translating ({lang})", total=100)
+                return translate_language(
+                    api, po, sources, lang, default_language, locale_dir,
+                    lambda p: progress.update(bar, completed=p),
+                )
+
+            results = [r for r in pool.map(run, pending) if r]
+
+    for result in results:
+        if not result["missing"]:
+            cache[result["lang"]] = version
+    if results:
+        save_cache(locale_dir, cache)
+
+    started = time.monotonic()
+    call_command("compilemessages", verbosity=0, ignore=exclude_dirs)
+    compile_time = time.monotonic() - started
+
     console.log(
-        "\n🎉 [bold green]Translation generation for all languages completed successfully ✅[/]\n"
+        f"⏱ extract {extract_time:.1f}s · upload {upload_time:.1f}s · "
+        f"compile {compile_time:.1f}s · total {time.monotonic() - run_started:.1f}s · "
+        f"{api.requests_made} HTTP requests"
     )
+    for r in results:
+        t = r["timings"]
+        console.log(
+            f"   {r['lang']}: {r['filled']} filled, {r['missing']} missing, "
+            f"{r['rejected']} rejected · translate {t['translate']:.1f}s · "
+            f"download {t['download']:.1f}s · write {t['write']:.1f}s"
+        )
+    console.log("🎉 [bold green]Translations completed ✅[/]")

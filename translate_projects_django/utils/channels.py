@@ -1,34 +1,37 @@
+import asyncio
 import json
 
 import websockets
 from rich.console import Console
-from rich.progress import Progress
+
+WS_URL = "wss://api.translateprojects.dev/ws/progress/{task_id}/"
+# Progress only arrives after each AI batch, so allow for a slow batch before giving up
+IDLE_TIMEOUT = 120
 
 console = Console(log_time=True, log_path=False)
 
 
-async def listen_progress(task_id, lang, message=None):
-    url = f"wss://api.translateprojects.dev/ws/progress/{task_id}/"
+async def _listen(task_id, on_progress, idle_timeout):
+    async with websockets.connect(WS_URL.format(task_id=task_id)) as ws:
+        while True:
+            message = await asyncio.wait_for(ws.recv(), idle_timeout)
+            try:
+                progress = float(json.loads(message).get("progress", 0))
+            except (ValueError, AttributeError):
+                continue
+            on_progress(progress)
+            if progress >= 100:
+                return True
 
-    async with websockets.connect(url) as websocket:
-        with Progress() as progress_bar:
-            if not message:
-                message = f"           📝 Sync Translations ({lang})... "
-            task = progress_bar.add_task(message, total=100)
-            last_progress = 0
 
-            while not progress_bar.finished:
-                response = await websocket.recv()
-                try:
-                    data = json.loads(response)
-                    new_progress = float(data.get("progress", 0))
-
-                    if new_progress > last_progress:
-                        last_progress = new_progress
-                        progress_bar.update(task, completed=new_progress)
-
-                except json.JSONDecodeError:
-                    console.log("❌ [red]Error:[/] Failed to decode JSON", response)
-                if last_progress >= 100:
-                    progress_bar.update(task, completed=100)
-                    break
+def wait_task(task_id, on_progress=lambda p: None, idle_timeout=IDLE_TIMEOUT):
+    """Blocks until the task reports 100 %. Returns False on timeout or socket errors, never raises."""
+    try:
+        return asyncio.run(_listen(task_id, on_progress, idle_timeout))
+    except asyncio.TimeoutError:
+        console.log(
+            f"⚠ [yellow]No progress for {idle_timeout}s on task {task_id}, continuing.[/]"
+        )
+    except (OSError, websockets.exceptions.WebSocketException) as e:
+        console.log(f"⚠ [yellow]Progress socket failed ({e}), continuing.[/]")
+    return False

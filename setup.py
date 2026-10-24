@@ -33,7 +33,7 @@ setup(
         "Django>=3.0",
         "polib>=1.2.0",
         "requests>=2.27.1,<3.0",
-        "rich>=12.4.4,<13.0",
-        "websockets>=10.3,<11.0",
+        "rich>=12.4.4",
+        "websockets>=10.3",
     ],
 )
