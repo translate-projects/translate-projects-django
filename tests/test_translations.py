@@ -165,6 +165,66 @@ class FlowTests(unittest.TestCase):
         self.assertEqual([c for c in fake.calls if c[0] == "translate"], [("translate", "en")])
         self.assertEqual(set(tr.load_cache(settings.LOCALE_PATHS[0])), {"en", "pt-br"})
 
+    def test_upload_error_keeps_existing_files(self):
+        self.run_command(FakeApi())
+        en_path = tr.po_path(settings.LOCALE_PATHS[0], "en")
+        before = open(en_path).read()
+
+        class InvalidToken(FakeApi):
+            def validate_changes(self, data):  # 400 "Token no válido" → Api returns None
+                return None
+
+            def sync_sources(self, *args):
+                self.calls.append(("sync",))
+                return None
+
+        fake = InvalidToken()
+        self.run_command(fake, force=True)
+        self.assertNotIn("translate", [c[0] for c in fake.calls])
+        self.assertEqual(open(en_path).read(), before)
+
+    def test_failed_language_keeps_its_file_and_others_continue(self):
+        self.run_command(FakeApi())
+        pt_path = os.path.join(TMP, "locale", "pt_BR", "LC_MESSAGES", "django.po")
+        before = open(pt_path).read()
+
+        class PtDown(FakeApi):
+            def get_translations(self, target_lang):  # 5xx after retries → None
+                return None if target_lang == "pt-BR" else super().get_translations(target_lang)
+
+        fake = PtDown()
+        self.run_command(fake, force=True)
+        self.assertEqual(open(pt_path).read(), before)
+        self.assertEqual({c[1] for c in fake.calls if c[0] == "translate"}, {"en", "pt-BR"})
+
+    def test_partial_response_writes_what_came_and_retries_next_run(self):
+        class MissingApiKey(FakeApi):
+            # Project without AI key: only texts already in the global network come back
+            def get_translations(self, target_lang):
+                return {generate_short_hash("Hola"): TRANSLATED[target_lang]["Hola"]}
+
+        self.run_command(MissingApiKey())
+        en = polib.pofile(tr.po_path(settings.LOCALE_PATHS[0], "en"))
+        self.assertEqual(en.find("Hola").msgstr, "Hello")
+        self.assertEqual(en.find("<b>Guardar</b>").msgstr, "")
+        self.assertEqual(tr.load_cache(settings.LOCALE_PATHS[0]), {})
+
+        fake = FakeApi(changed={})
+        self.run_command(fake)
+        self.assertEqual(len([c for c in fake.calls if c[0] == "translate"]), 2)
+
+    def test_new_text_uploads_again(self):
+        self.run_command(FakeApi())
+        MSGIDS.append("Nuevo")
+        try:
+            fake = FakeApi(changed=None)
+            self.run_command(fake)
+        finally:
+            MSGIDS.remove("Nuevo")
+        sync = [c for c in fake.calls if c[0] == "sync"]
+        self.assertIn("Nuevo", sync[0][2])
+        self.assertEqual(len([c for c in fake.calls if c[0] == "translate"]), 2)
+
     def test_invalid_locale_does_nothing(self):
         fake = FakeApi()
         self.run_command(fake, locale="ko")

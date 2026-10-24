@@ -18,8 +18,8 @@ A second run with no new texts makes one HTTP request and skips every language t
 
 ## Requirements
 
-- Python >= 3.7
-- Django >= 3.0
+- Python >= 3.8
+- Django >= 3.2
 - A Translate Projects API key
 
 ## Installation
