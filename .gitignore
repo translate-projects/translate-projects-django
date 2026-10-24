@@ -5,4 +5,5 @@ __pycache__/
 translate_projects_django.egg-info/
 _README.md
 __pycache__/
-__init__.py
+.vscode
+.DS_Store

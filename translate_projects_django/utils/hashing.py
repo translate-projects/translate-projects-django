@@ -1,5 +1,6 @@
 import hashlib
 
+
 def base36_encode(number: int) -> str:
     """
     Encodes a number into a Base36 string.
@@ -15,6 +16,7 @@ def base36_encode(number: int) -> str:
         result = chars[i] + result
     return result or "0"
 
+
 def generate_short_hash(text: str, length: int = 15) -> str:
     """
     Generates a short hash for a given text using SHA-256 and Base36 encoding.
@@ -25,9 +27,9 @@ def generate_short_hash(text: str, length: int = 15) -> str:
         str: The short Base36 hash.
     """
     # Generate SHA-256 hash from the text
-    hash_bytes = hashlib.sha256(text.encode()).digest()
+    hash_bytes = hashlib.sha256(text.trim().encode()).digest()
     # Convert the hash to an integer
-    hash_int = int.from_bytes(hash_bytes, 'big')
+    hash_int = int.from_bytes(hash_bytes, "big")
     # Convert the integer to Base36
     base36_hash = base36_encode(hash_int)
     # Return a shorter portion of the hash

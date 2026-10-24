@@ -1,48 +1,65 @@
-from django.core.management import call_command
 from django.conf import settings
-from translate_projects_django.manage_translations import generate_translations
-import os
-from translate_projects_django.api_utils import Api
+from django.core.management import call_command
+from rich.console import Console
 
-def make_translations(self,locale_param):    
+from translate_projects_django.utils.api import Api
+from translate_projects_django.utils.translations import generate_translations
 
-    languages = getattr(settings, 'LANGUAGES', [])
-    locale_dir = getattr(settings, 'LOCALE_PATHS', [])[0]
-    default_language = getattr(settings, 'LANGUAGE_CODE', '')
+console = Console(log_time=True, log_path=False)
+
+
+def make_translations(self, locale_param):
+    languages = getattr(settings, "LANGUAGES", [])
+    locale_dir = getattr(settings, "LOCALE_PATHS", [])[0]
+    default_language = getattr(settings, "LANGUAGE_CODE", "")
 
     self.api_client = Api()
-    # Generate translations for the default language ('es' in this case)
-    generate_translations(self, 'es', locale_dir)
-    
+
+    console.log("🎯 [bold green]Start Generate Translations")
+
+    # 🚀 Generar traducciones para el idioma predeterminado
+    generate_translations(self, "es", locale_dir)
+
     if locale_param:
-        # Check if the provided locale is valid
+        # ⚠ Validar si el idioma proporcionado es válido
         if locale_param not in dict(languages):
-            self.stdout.write(self.style.ERROR(f"The language '{locale_param}' is not valid."))
-            self.stdout.write(self.style.ERROR(f"Available languages: {', '.join([lang[0] for lang in languages])}"))
-            self.stdout.write(self.style.ERROR(f"You can add the language in the settings.py file under LANGUAGES=[...]"))
+            console.log(f"[red]❌ The language '{locale_param}' is not valid.[/]")
+            console.log(
+                f"[yellow]⚠ Available languages:[/] {', '.join([lang[0] for lang in languages])}"
+            )
+            console.log(
+                "[blue]💡 You can add the language in settings.py under LANGUAGES=[...][/]"
+            )
             return
 
-        # Warn if the locale is the same as the default language
+        # ⚠ Advertir si el idioma es el mismo que el predeterminado
         if locale_param == default_language:
-            self.stdout.write(self.style.WARNING(f"The language '{locale_param}' is not translated, as the default language '{default_language}' has already been translated."))
+            console.log(
+                f"[yellow]⚠ The language '{locale_param}' is not translated because it's the default language '{default_language}'.[/]"
+            )
             return
 
-        # Translate for the specific locale
-        self.stdout.write(self.style.SUCCESS(f"\n🚀 Translating for language: {locale_param}"))
+        # 🚀 Traducir para el idioma específico
+        console.log("\n🚀 [bold green]Translating for language:[/] {locale_param}")
         generate_translations(self, locale_param, locale_dir)
-        self.stdout.write(self.style.SUCCESS(f"\n🎉 Translation generation for '{locale_param}' completed successfully ✅\n"))
+        console.log(
+            f"\n🎉 [bold green]Translation for '{locale_param}' completed successfully ✅[/]\n"
+        )
 
-        # Compile messages
-        self.stdout.write(self.style.WARNING(f"\n🛠 Compiling messages..."))
-        call_command('compilemessages',verbosity=0)
+        # 🛠 Compilar mensajes
+        console.log("\n🛠 [yellow]Compiling messages...[/]")
+        call_command("compilemessages", verbosity=0)
         return
 
-    # If no specific locale is passed, generate translations for all languages except the default language
+    # 🌍 Si no se proporciona un idioma específico, traducir todos los idiomas excepto el predeterminado
     for code, name in languages:
         if code != default_language:
             generate_translations(self, code, locale_dir)
 
-    # Compile messages after translations are generated for all languages
-    self.stdout.write(self.style.WARNING(f"\n🛠 Compiling messages for all languages..."))
-    call_command('compilemessages',verbosity=0)
-    self.stdout.write(self.style.SUCCESS(f"\n🎉 Translation generation for all languages completed successfully ✅\n"))
+    # 🛠 Compilar mensajes después de generar todas las traducciones
+    console.log("\n🛠 [yellow]Compiling messages for all languages...[/]")
+
+    call_command("compilemessages", verbosity=0)
+    console.log(
+        "\n🎉 [bold green]Translation generation for all languages completed successfully ✅[/]\n"
+    )

@@ -1,13 +1,13 @@
-from setuptools import setup, find_packages
+from setuptools import find_packages, setup
 
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 setup(
     name="translate-projects-django",
-    version="0.0.8",
+    version="0.0.11",
     author="Neider Ruiz",
-    author_email="contact@neiderruiz.com",
+    author_email="contact@translateprojects.dev",
     description="Translate your Django projects easily",
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -33,5 +33,7 @@ setup(
         "Django>=3.0",
         "polib>=1.2.0",
         "requests>=2.27.1,<3.0",
+        "rich>=12.4.4,<13.0",
+        "websockets>=10.3,<11.0",
     ],
 )
